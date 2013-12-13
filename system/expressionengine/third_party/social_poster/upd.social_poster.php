@@ -51,9 +51,17 @@ class Social_poster_upd {
         $data = array( 'class' => 'Social_poster' , 'method' => 'save_permissions' ); 
         $this->EE->db->insert('actions', $data); 
         
+        $data = array( 'class' => 'Social_poster' , 'method' => 'save_default_permissions' ); 
+        $this->EE->db->insert('actions', $data); 
+        
         if ($this->EE->db->field_exists('social_poster_permissions', 'members') == FALSE)
 		{
 			$this->EE->dbforge->add_column('members', array('social_poster_permissions' => array('type' => 'TEXT') ) );
+		}
+        
+        if ($this->EE->db->field_exists('social_poster_permissions', 'members') == FALSE)
+		{
+			$this->EE->dbforge->add_column('members', array('social_poster_permissions_detailed' => array('type' => 'TEXT') ) );
 		}
         
         return TRUE; 

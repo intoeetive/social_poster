@@ -4,47 +4,111 @@ class Sp_hook {
  		
 	public function __construct($params = array())
 	{
-		//parent::__construct($params);
+		$this->EE =& get_instance();        
 	}	
     
-    public function get_providers()
+    public function get_tmpl($hook)
+	{
+        $q = $this->EE->db->select("tmpl_body, tmpl_link")
+                ->from('social_poster_templates')
+                ->where('hook', $hook)
+                ->where('site_id', $this->EE->config->item('site_id'))
+                ->get();
+                
+        if ($q->num_rows()==0) return false;
+        
+        $tmpl = array(
+            'link'  => $q->row('tmpl_link'),
+            'message'   => $q->row('tmpl_body')
+        );
+        
+        return $tmpl;
+    }
+    
+    
+    function template()
+    {
+        $template = "{site_name}";
+        return $template;
+    }
+    
+    function vars()
+    {
+        $vars = array(
+            'site_name'         => 'Site name'
+        );
+        return serialize($vars);
+    }
+    
+    function link()
+    {
+        $link = '{site_url}';
+        return $link;
+    }
+    
+    
+    public function get_keys()
 	{
 
-        $providers = array();
+        $keys_arr = array();
 
         $site_id = $this->EE->config->item('site_id');
         
-        $this->EE->db->select('social_poster_permissions')
+        //first, keys
+        
+        //then, permissions
+        
+        $this->EE->db->select('social_login_keys, social_poster_permissions')
             ->from('members')
             ->where('member_id', $this->EE->session->userdata('member_id'));
         $q = $this->EE->db->get();
-        if ($q->row('social_poster_permissions')!='')
+        if ($q->row('social_login_keys')=='') return false;
+        if ($q->row('social_login_keys')!='')
         {
+            $user_keys = unserialize($q->row('social_login_keys'));
             $user_permissions = unserialize($q->row('social_poster_permissions'));
-            if (isset($user_permissions[$site_id]))
+            
+            if (empty($user_keys)) return false;
+            foreach ($user_keys as $provider => $keys)
             {
-                $providers = $user_permissions[$site_id];
-                return $providers;
+                if (isset($user_permissions[$site_id][$provider]))
+                {
+                    if ($user_permissions[$site_id][$provider]=='y')
+                    {
+                        $keys_arr[$provider] = $keys;
+                    }
+                }
+                else
+                {
+                    if (!isset($settings))
+                    {
+                        $settings_query = $this->EE->db->select("settings")
+                                            ->from('extensions')
+                                            ->where('class', 'Social_poster_ext')
+                                            ->where('settings != ', '')
+                                            ->limit('1')
+                                            ->get();
+                        $settings = unserialize($settings_query->row('settings')); 
+                    }
+                    if ($settings[$site_id]['post_by_default'][$provider]=='y')
+                    {
+                        $keys_arr[$provider] = $keys;
+                    }
+                }
             }
+
         }
-        
-        $settings_query = $this->EE->db->select("settings")->from('extensions')->where('class', 'Social_poster_ext')->where('settings != ', '')->limit('1');
-        $settings = unserialize($settings_query->row('settings')); 
-        
-        foreach ($settings[$site_id]['post_by_default'] as $provider=>$enabled)
-        {
-            if ($enabled=='')
-            {
-                $providers[] = $provider;
-            }
-        }
-        
-        return $providers;
+
+        return $keys_arr;
     }
     
     
 	public function post($message, $link = '')
 	{
+        
+        $keys_arr = $this->get_keys();
+        
+        if ($keys_arr==false || empty($keys_arr)) return false;
         
         if ( ! class_exists('Social_login_pro_ext'))
     	{
@@ -53,23 +117,31 @@ class Sp_hook {
     	
     	$SLP = new Social_login_pro_ext();
         
+        $slp_settings_q = $this->EE->db->select('settings')
+                            ->from('modules')
+                            ->where('module_name','Social_login_pro')
+                            ->limit(1)
+                            ->get(); 
+        if ($slp_settings_q->num_rows()==0) return false;
+
+        $slp_settings = unserialize($slp_settings_q->row('settings'));
+        
         $site_id = $this->EE->config->item('site_id');
         
+        foreach ($keys_arr as $provider=>$keys)
+        {
         
 
-        if (!isset($keys["$provider"]['oauth_token']) || $keys["$provider"]['oauth_token']=='')
-        {
-            return;
-        }
-        if ($slp_settings[$site_id][$provider]['app_id']=='' || $slp_settings[$site_id][$provider]['app_secret']=='' || $slp_settings[$site_id][$provider]['custom_field']=='')
-        {
-            return;
-        }
-
-        if (!isset($slp_settings[$site_id][$provider]['enable_posts']) || $slp_settings[$site_id][$provider]['enable_posts']=='y')
-        {
-            $msg = $message;
-            if (strlen($msg)>$SLP->maxlen[$provider])
+            if (!isset($keys['oauth_token']) || $keys['oauth_token']=='')
+            {
+                continue;
+            }
+            if ($slp_settings[$site_id][$provider]['app_id']=='' || $slp_settings[$site_id][$provider]['app_secret']=='' || $slp_settings[$site_id][$provider]['custom_field']=='')
+            {
+                continue;
+            }
+    
+            if (!isset($slp_settings[$site_id][$provider]['enable_posts']) || $slp_settings[$site_id][$provider]['enable_posts']=='y')
             {
                 if ( ! class_exists('Shorteen'))
             	{
@@ -78,56 +150,34 @@ class Sp_hook {
             	
             	$SHORTEEN = new Shorteen();
                 
-                preg_match_all('/https?:\/\/[^:\/\s]{3,}(:\d{1,5})?(\/[^\?\s]*)?([\?#][^\s]*)?/i', $msg, $matches);
+                $link = $SHORTEEN->process($slp_settings[$site_id]['url_shortening_service'], $link, true);
 
-                foreach ($matches as $match)
-                {
-                    if (!empty($match) && strpos($match[0], 'http')===0)
-                    {
-                        //truncate urls
-                        $longurl = $match[0];
-                        if (strlen($longurl)>$SLP->max_link_length)
-                        {
-                            $shorturl = $SHORTEEN->process($slp_settings[$site_id]['url_shortening_service'], $longurl, true);
-                            if ($shorturl!='')
-                            {
-                                $msg = str_replace($longurl, $shorturl, $msg);
-                            }
-                        }
-                    }
-                }
-            }
-            //still too long? truncate the message
-            //at least one URL should always be included
-            if (strlen($msg)>$SLP->maxlen[$provider])
-            {
-                if ($shorturl!='')
+                //too long? truncate the message
+                if (strlen($message.' '.$link) > $SLP->maxlen[$provider])
                 {
                     $len = $SLP->maxlen[$provider] - strlen($shorturl) - 1;
-                    $msg = $SLP->_char_limit($msg, $len);
-                    $msg .= ' '.$shorturl;
+                    $message = $SLP->_char_limit($message, $len);
+                }
+                
+                if ($provider!='facebook') $message .= ' '.$link;
+                
+                
+                //all is ready! post the message
+                $lib = $provider.'_oauth';
+                $params = array('key'=>$slp_settings[$site_id]["$provider"]['app_id'], 'secret'=>$slp_settings[$site_id]["$provider"]['app_secret']);
+                
+    			$this->EE->load->add_package_path(PATH_THIRD.'social_login_pro/');
+    			$this->EE->load->library($lib, $params);
+                if ($provider=='yahoo')
+                {
+                    $this->EE->$lib->post($message, $link, $keys['oauth_token'], $keys['oauth_token_secret'], array('guid'=>$keys['guid']));
                 }
                 else
                 {
-                    $msg = $SLP->_char_limit($msg, $SLP->maxlen[$provider]);
+                    $this->EE->$lib->post($message, $link, $keys['oauth_token'], $keys['oauth_token_secret']);   
                 }
+                $this->EE->load->remove_package_path(PATH_THIRD.'social_login_pro/');
             }
-            
-            //all is ready! post the message
-            $lib = $provider.'_oauth';
-            $params = array('key'=>$slp_settings[$site_id]["$provider"]['app_id'], 'secret'=>$slp_settings[$site_id]["$provider"]['app_secret']);
-            
-			$this->EE->load->add_package_path(PATH_THIRD.'social_login_pro/');
-			$this->EE->load->library($lib, $params);
-            if ($provider=='yahoo')
-            {
-                $this->EE->$lib->post($msg, $shorturl, $keys["$provider"]['oauth_token'], $keys["$provider"]['oauth_token_secret'], array('guid'=>$keys["$provider"]['guid']));
-            }
-            else
-            {
-                $this->EE->$lib->post($msg, $shorturl, $keys["$provider"]['oauth_token'], $keys["$provider"]['oauth_token_secret']);    
-            }
-            $this->EE->load->remove_package_path(PATH_THIRD.'social_login_pro/');
         }
     }
 }

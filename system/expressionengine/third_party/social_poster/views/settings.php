@@ -32,6 +32,7 @@ $this->table->set_heading(
 foreach ($hooks as $key => $val)
 {
 	$this->table->add_row(lang($key, $key), $val);
+    $this->table->add_row($templates[$key]['vars'], $templates[$key]['template']);
 }
 
 echo $this->table->generate();

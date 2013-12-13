@@ -50,13 +50,15 @@ class Social_poster_ext {
     {
         $hooks = array();
         
+        $this->EE->load->dbforge(); 
+        
         //exp_social_poster_templates
         $fields = array(
 			'template_id'		=> array('type' => 'INT',		'unsigned' => TRUE, 'auto_increment' => TRUE),
             'site_id'		    => array('type' => 'INT',		'unsigned' => TRUE),
 			'hook'			    => array('type' => 'VARCHAR',	'constraint'=> 150,	'default' => ''), 	
 			'tmpl_body'		    => array('type' => 'TEXT',		'default' => ''),
-			'tmpl_vars'		    => array('type' => 'TEXT',		'default' => '')
+            'tmpl_link'		    => array('type' => 'TEXT',		'default' => '')
 		);
 
 		$this->EE->dbforge->add_field($fields);
@@ -76,20 +78,21 @@ class Social_poster_ext {
         foreach(scandir(PATH_THIRD.'social_poster/hooks/') as $file) {
             if (is_file(PATH_THIRD.'social_poster/hooks/'.$file)) 
             {
+                $name = str_replace('.php', '', $file);
                 $hooks[] = array(
-        			'hook'		=> str_replace('.php', '', $file),
-        			'method'	=> 'do_something',
+        			'hook'		=> $name,
+        			'method'	=> $name,
         			'priority'	=> 10
         		);
 
-                require_once PATH_THIRD.'social_poster/hooks/'.$name;
+                require_once PATH_THIRD.'social_poster/hooks/'.$file;
                 $class_name = ucfirst($name).'_sp_hook';
                 $SL_HOOK = new $class_name();
                 $tmpl_data = array(
                     'site_id'       => $this->EE->config->item('site_id'),
-                    'hook'          => str_replace('.php', '', $file),
+                    'hook'          => $name,
                     'tmpl_body'     => $SL_HOOK->template(),
-                    'tmpl_vars'     => $SL_HOOK->vars(),
+                    'tmpl_link'     => $SL_HOOK->link()
                 );
                 $this->EE->db->insert('social_poster_templates', $tmpl_data);
             }
@@ -117,6 +120,9 @@ class Social_poster_ext {
     function update_extension($current = '')
     {
     	$hooks = array();
+        
+        $this->EE->load->library('sp_hook');
+        
         foreach(scandir(PATH_THIRD.'social_poster/hooks/') as $file) {
             if (is_file(PATH_THIRD.'social_poster/hooks/'.$file)) 
             {
@@ -139,16 +145,26 @@ class Social_poster_ext {
                 	);
                     $this->EE->db->insert('extensions', $data);
                     
-                    require_once PATH_THIRD.'social_poster/hooks/'.$name;
-                    $class_name = ucfirst($name).'_sp_hook';
+                }
+                
+                $check = $this->EE->db->select('template_id')
+                        ->from('social_poster_templates')
+                        ->where('hook', $hook)
+                        ->where('site_id', $this->EE->config->item('site_id'))
+                        ->get();
+                if ($check->num_rows()==0)
+                {
+                    require_once PATH_THIRD.'social_poster/hooks/'.$hook.'.php';
+                    $class_name = ucfirst($hook).'_sp_hook';
                     $SL_HOOK = new $class_name();
                     $tmpl_data = array(
                         'site_id'       => $this->EE->config->item('site_id'),
                         'hook'          => str_replace('.php', '', $file),
                         'tmpl_body'     => $SL_HOOK->template(),
-                        'tmpl_vars'     => $SL_HOOK->vars(),
+                        'tmpl_link'     => $SL_HOOK->link()
                     );
                     $this->EE->db->insert('social_poster_templates', $tmpl_data);
+                    
                 }
             }
         }
@@ -173,7 +189,10 @@ class Social_poster_ext {
     {
     	$this->EE->db->where('class', __CLASS__);
     	$this->EE->db->delete('extensions');        
-                    
+        
+        $this->EE->load->dbforge(); 
+        $this->EE->dbforge->drop_table('social_poster_templates');
+            
     }
     
     
@@ -188,28 +207,60 @@ class Social_poster_ext {
     	}
     	$SLP = new Social_login_pro_ext();
         $this->EE->lang->loadfile('social_login_pro');
+        
+        $slp_settings_q = $this->EE->db->select('settings')
+                            ->from('modules')
+                            ->where('module_name','Social_login_pro')
+                            ->limit(1)
+                            ->get(); 
+        if ($slp_settings_q->num_rows()==0) return false;
+
+        $slp_settings = unserialize($slp_settings_q->row('settings'));
+        
+        $this->EE->load->library('sp_hook');
 
         $vars = array();
         foreach ($SLP->providers as $provider)
         {
-            $enabled_by_default = (isset($settings[$site_id][$provider]['post_by_default']))?$settings[$site_id][$provider]['post_by_default']:'y';
-            $vars['settings'][$provider] = form_radio("permissions[$provider]", 'y', ($enabled_by_default=='y')?true:false, 'id="'.$provider.'_y"').form_label(lang('yes'), $provider.'_y').
-                NBS.
-                form_radio("permissions[$provider]", 'n', ($enabled_by_default=='n')?true:false, 'id="'.$provider.'_n"').form_label(lang('no'), $provider.'_n');
+            if ($slp_settings[$site_id][$provider]['enable_posts']=='y')
+            {
+                $enabled_by_default = (isset($settings[$site_id]['post_by_default'][$provider]))?$settings[$site_id]['post_by_default'][$provider]:'y';
+                $vars['settings'][$provider] = form_radio("permissions[$provider]", 'y', ($enabled_by_default=='y')?true:false, 'id="'.$provider.'_y"').form_label(lang('yes'), $provider.'_y').
+                    NBS.
+                    form_radio("permissions[$provider]", 'n', ($enabled_by_default=='n')?true:false, 'id="'.$provider.'_n"').form_label(lang('no'), $provider.'_n');
+            }
         }
         
         //list all hooks
         
-        $hooks_q = $this->EE->db->select('extension_id, hook, enabled')
+        $hooks_q = $this->EE->db->select('extension_id, extensions.hook, enabled, tmpl_body, tmpl_link')
                         ->from('extensions')
+                        ->join('social_poster_templates', 'extensions.hook=social_poster_templates.hook', 'left')
                         ->where('class', __CLASS__)
-                        ->where('hook != ', 'dummy')
+                        ->where('extensions.hook != ', 'dummy')
                         ->get();
         foreach ($hooks_q->result_array() as $row)
         {
+            require_once PATH_THIRD.'social_poster/hooks/'.$row['hook'].'.php';
+            $class_name = ucfirst($row['hook']).'_sp_hook';
+            $SL_HOOK = new $class_name();
+            
             $vars['hooks'][$row['hook']] = form_radio("hooks[{$row['hook']}]", 'y', ($row['enabled']=='y')?true:false, 'id="'.$row['hook'].'_y"').form_label(lang('yes'), $row['hook'].'_y').
                 NBS.
                 form_radio("hooks[{$row['hook']}]", 'n', ($row['enabled']=='n')?true:false, 'id="'.$row['hook'].'_n"').form_label(lang('no'), $row['hook'].'_n');
+            $vars['templates'][$row['hook']] = array(
+                'vars'      => '',
+                'template'  => form_textarea("templates[{$row['hook']}]", (isset($row['tmpl_body']) && $row['tmpl_body']!='')?$row['tmpl_body']:$SL_HOOK->template()).
+                                BR.
+                                form_input("links[{$row['hook']}]", (isset($row['tmpl_link']) && $row['tmpl_link']!='')?$row['tmpl_link']:$SL_HOOK->link())
+            );
+            
+            
+            $tmpl_vars = unserialize($SL_HOOK->vars());
+            foreach ($tmpl_vars as $key=>$val)
+            {
+                $vars['templates'][$row['hook']]['vars'] .= $key.' &mdash; '.$val.BR;
+            }
         }
 
     	return $this->EE->load->view('settings', $vars, TRUE);			
@@ -232,23 +283,46 @@ class Social_poster_ext {
         $q = $this->EE->db->get();
         if ($q->row('settings')!='')
         {
-            $permissions = unserialize($q->row('settings'));
+            $settings = unserialize($q->row('settings'));
         }
         
         $site_id = $this->EE->config->item('site_id');
 
         foreach ($_POST['permissions'] as $key=>$val)
         {
-            $permissions[$site_id][$key]['post_by_default'] = $val;
+            $settings[$site_id]['post_by_default'][$key] = $val;
         }        
-        $upd_data = array('settings' => serialize($permissions));
+        $upd_data = array('settings' => serialize($settings));
 
-        unset($_POST['submit']);
-        
         $this->EE->db->where('class', __CLASS__);
     	$this->EE->db->update('extensions', $upd_data);
         
-        //make sure we have hook record for each file in hooks folder
+        
+        foreach ($_POST['templates'] as $key=>$val)
+        {
+            $where = array(
+                'site_id'   => $site_id,
+                'hook'      => $key
+            );
+            $upd_data = array(
+                'tmpl_body' => $val,
+                'tmpl_link' => $_POST['links'][$key]
+            );
+            $this->EE->db->select('template_id');
+            $this->EE->db->where($where);
+            $q = $this->EE->db->get('social_poster_templates');
+            if ($q->num_rows()>0)
+            {
+                $this->EE->db->where('template_id', $q->row('template_id'));
+                $this->EE->db->update('social_poster_templates', $upd_data);
+            }
+            else
+            {
+                $upd_data = array_merge($upd_data, $where);
+                $this->EE->db->insert('social_poster_templates', $upd_data);
+            }
+        }         
+        
         foreach ($_POST['hooks'] as $hook=>$enabled)
         {
             $upd_data = array('enabled' => $enabled);
@@ -287,9 +361,7 @@ class Social_poster_ext {
     
     function do_something($var1=false, $var2=false, $var3=false, $var4=false, $var5=false)
     {
-        $d = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-        var_dump($d);
-        exit();
+        //
     }
     
     
