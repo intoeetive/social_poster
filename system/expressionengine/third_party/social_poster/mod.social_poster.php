@@ -214,6 +214,7 @@ class Social_poster {
         
         $site_id = $this->EE->config->item('site_id');
         $tagdata = $this->EE->TMPL->tagdata;
+        $this->EE->lang->loadfile('social_login_pro');
         
         $this->EE->db->select('social_poster_permissions, social_poster_permissions_detailed')
             ->from('members')
@@ -229,38 +230,17 @@ class Social_poster {
             $settings = unserialize($settings_query->row('settings')); 
             $global_permissions = $settings[$site_id]['post_by_default'];
         }
-
-            foreach ($keys as $provider_name=>$provider_data)
-            {
-                if (!empty($existing_permissions) && isset($existing_permissions[$site_id]) && isset($existing_permissions[$site_id][$provider_name]))
-                {
-                    $enabled = $existing_permissions[$site_id][$provider_name];
-                }
-                else
-                {
-                    $enabled = $enabled_by_default[$provider_name];
-                }
-                $permissions[$provider] = $enabled;
-            }
-        }
         
-        $settings_query = $this->EE->db->select("settings")->from('extensions')->where('class', 'Social_poster_ext')->where('settings != ', '')->limit('1')->get();
-        $settings = unserialize($settings_query->row('settings')); 
-        
-        if ( ! class_exists('Social_login_pro_ext'))
-    	{
-    		require_once PATH_THIRD.'social_login_pro/ext.social_login_pro.php';
-    	}
-    	$SLP = new Social_login_pro_ext();
-        $this->EE->lang->loadfile('social_login_pro');
-        
-        $permissions = array();
-        $enabled_by_default = array();
-        foreach ($SLP->providers as $provider)
+        $hooks_q = $this->EE->db->select('hook')
+                        ->from('extensions')
+                        ->where('class', __CLASS__)
+                        ->where('extensions.hook != ', 'dummy')
+                        ->where('enabled', 'y')
+                        ->get();
+        if ($hooks_q->num_rows()==0 || empty($global_permissions))
         {
-            $enabled_by_default[$provider] = (isset($settings[$site_id]['post_by_default'][$provider]))?$settings[$site_id]['post_by_default'][$provider]:'y';
+            return $this->EE->TMPL->no_results();
         }
-        
         
         
         if (preg_match("/".LD."permissions".RD."(.*?)".LD.'\/'."permissions".RD."/s", $tagdata, $match))
@@ -268,22 +248,28 @@ class Social_poster {
 			$tmpl = $match['1'];
             $rows = '';
             
-            foreach ($permissions as $key=>$val)
+            foreach ($provider as $provider=>$enabled)
             {
-                $row = $tmpl;
-                $row = $this->EE->TMPL->swap_var_single('field_name', 'permissions['.$key.']', $row);
-                $row = $this->EE->TMPL->swap_var_single('field_label', lang($key), $row);
-                if ($val=='y')
+                if ($enabled=='y')
                 {
-                    $row = $this->EE->TMPL->swap_var_single('selected', ' selected="selected"', $row);
-                    $row = $this->EE->TMPL->swap_var_single('checked', ' checked="checked"', $row);
+                    foreach ($hooks_q->result_array() as $hook_row)
+                    {
+                        $row = $tmpl;
+                        $row = $this->EE->TMPL->swap_var_single('field_name', "permissions[$provider][{$hook_row['hook']}]", $row);
+                        $row = $this->EE->TMPL->swap_var_single('field_label', lang('post_to').' '.lang($provider).' '.lang('when').' '.$action, $row);
+                        if ($val=='y')
+                        {
+                            $row = $this->EE->TMPL->swap_var_single('selected', ' selected="selected"', $row);
+                            $row = $this->EE->TMPL->swap_var_single('checked', ' checked="checked"', $row);
+                        }
+                        else
+                        {
+                            $row = $this->EE->TMPL->swap_var_single('selected', '', $row);
+                            $row = $this->EE->TMPL->swap_var_single('checked', '', $row);
+                        }
+                        $rows .= $row;
+                    }
                 }
-                else
-                {
-                    $row = $this->EE->TMPL->swap_var_single('selected', '', $row);
-                    $row = $this->EE->TMPL->swap_var_single('checked', '', $row);
-                }
-                $rows .= $row;
             }
             
             $tagdata = preg_replace ("/".LD."permissions".RD.".*?".LD.'\/'."permissions".RD."/s", $rows, $tagdata);
