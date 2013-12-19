@@ -97,13 +97,17 @@ class Social_poster {
                 $row = $this->EE->TMPL->swap_var_single('field_label', lang($key), $row);
                 if ($val=='y')
                 {
-                    $row = $this->EE->TMPL->swap_var_single('selected', ' selected="selected"', $row);
-                    $row = $this->EE->TMPL->swap_var_single('checked', ' checked="checked"', $row);
+                    $row = $this->EE->TMPL->swap_var_single('selected_yes', ' selected="selected"', $row);
+                    $row = $this->EE->TMPL->swap_var_single('checked_yes', ' checked="checked"', $row);
+                    $row = $this->EE->TMPL->swap_var_single('selected_no', '', $row);
+                    $row = $this->EE->TMPL->swap_var_single('checked_no', '', $row);
                 }
                 else
                 {
-                    $row = $this->EE->TMPL->swap_var_single('selected', '', $row);
-                    $row = $this->EE->TMPL->swap_var_single('checked', '', $row);
+                    $row = $this->EE->TMPL->swap_var_single('selected_no', ' selected="selected"', $row);
+                    $row = $this->EE->TMPL->swap_var_single('checked_no', ' checked="checked"', $row);
+                    $row = $this->EE->TMPL->swap_var_single('selected_yes', '', $row);
+                    $row = $this->EE->TMPL->swap_var_single('checked_yes', '', $row);
                 }
                 $rows .= $row;
             }
@@ -254,18 +258,26 @@ class Social_poster {
                 {
                     foreach ($hooks_q->result_array() as $hook_row)
                     {
+                        require_once PATH_THIRD.'social_poster/hooks/'.$hook_row['hook'].'.php';
+                        $class_name = ucfirst($name).'_sp_hook';
+                        $SL_HOOK = new $class_name();
+        
                         $row = $tmpl;
                         $row = $this->EE->TMPL->swap_var_single('field_name', "permissions[$provider][{$hook_row['hook']}]", $row);
-                        $row = $this->EE->TMPL->swap_var_single('field_label', lang('post_to').' '.lang($provider).' '.lang('when').' '.$action, $row);
+                        $row = $this->EE->TMPL->swap_var_single('field_label', lang('post_to').' '.lang($provider).' '.lang('when').' '.$SL_HOOK->action_name, $row);
                         if ($val=='y')
                         {
-                            $row = $this->EE->TMPL->swap_var_single('selected', ' selected="selected"', $row);
-                            $row = $this->EE->TMPL->swap_var_single('checked', ' checked="checked"', $row);
+                            $row = $this->EE->TMPL->swap_var_single('selected_yes', ' selected="selected"', $row);
+                            $row = $this->EE->TMPL->swap_var_single('checked_yes', ' checked="checked"', $row);
+                            $row = $this->EE->TMPL->swap_var_single('selected_no', '', $row);
+                            $row = $this->EE->TMPL->swap_var_single('checked_no', '', $row);
                         }
                         else
                         {
-                            $row = $this->EE->TMPL->swap_var_single('selected', '', $row);
-                            $row = $this->EE->TMPL->swap_var_single('checked', '', $row);
+                            $row = $this->EE->TMPL->swap_var_single('selected_no', ' selected="selected"', $row);
+                            $row = $this->EE->TMPL->swap_var_single('checked_no', ' checked="checked"', $row);
+                            $row = $this->EE->TMPL->swap_var_single('selected_yes', '', $row);
+                            $row = $this->EE->TMPL->swap_var_single('checked_yes', '', $row);
                         }
                         $rows .= $row;
                     }

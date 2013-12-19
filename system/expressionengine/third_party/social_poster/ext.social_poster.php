@@ -245,7 +245,7 @@ class Social_poster_ext {
             $class_name = ucfirst($row['hook']).'_sp_hook';
             $SL_HOOK = new $class_name();
             
-            $vars['hooks'][$row['hook']] = form_radio("hooks[{$row['hook']}]", 'y', ($row['enabled']=='y')?true:false, 'id="'.$row['hook'].'_y"').form_label(lang('yes'), $row['hook'].'_y').
+            $vars['hooks'][$SL_HOOK->action_name] = form_radio("hooks[{$row['hook']}]", 'y', ($row['enabled']=='y')?true:false, 'id="'.$row['hook'].'_y"').form_label(lang('yes'), $row['hook'].'_y').
                 NBS.
                 form_radio("hooks[{$row['hook']}]", 'n', ($row['enabled']=='n')?true:false, 'id="'.$row['hook'].'_n"').form_label(lang('no'), $row['hook'].'_n');
             $vars['templates'][$row['hook']] = array(

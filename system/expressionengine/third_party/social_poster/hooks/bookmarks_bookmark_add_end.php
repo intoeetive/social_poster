@@ -1,10 +1,11 @@
 <?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
 
 class Bookmarks_bookmark_add_end_sp_hook extends Sp_hook {
-    
-   	public function __construct($data = array(), $debug = FALSE)
+       
+    public function __construct($data = array(), $debug = FALSE)
 	{
 		parent::__construct($data);
+        $this->action_name = 'bookmark added';
 	}
     
     function template()
@@ -16,9 +17,13 @@ class Bookmarks_bookmark_add_end_sp_hook extends Sp_hook {
     function vars()
     {
         $vars = array(
+            'type'          => 'Data type (comment|entry|member|category)',
+            'entry_id'         => 'Entry ID',
             'title'         => 'Entry title',
-            'channel_name'  => 'Channel name',
-            'type'          => 'Data type (comment|entry|member|category)'
+            'channel_title'  => 'Channel name',
+            'channel_url'  => 'Channel URL',
+            'comment_url'  => 'Channel comment page URL',
+            '...'       => 'All entry variables from exp_channel_titles (no custom fields)'
         );
         return serialize($vars);
     }
@@ -69,7 +74,7 @@ class Bookmarks_bookmark_add_end_sp_hook extends Sp_hook {
         $message = $this->EE->template->advanced_conditionals($message);
         
 
-        parent::post($message, $link);
+        parent::post('bookmarks_bookmark_add_end', $message, $link);
     }
     
 }

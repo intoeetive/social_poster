@@ -59,7 +59,7 @@ class Social_poster_upd {
 			$this->EE->dbforge->add_column('members', array('social_poster_permissions' => array('type' => 'TEXT') ) );
 		}
         
-        if ($this->EE->db->field_exists('social_poster_permissions', 'members') == FALSE)
+        if ($this->EE->db->field_exists('social_poster_permissions_detailed', 'members') == FALSE)
 		{
 			$this->EE->dbforge->add_column('members', array('social_poster_permissions_detailed' => array('type' => 'TEXT') ) );
 		}

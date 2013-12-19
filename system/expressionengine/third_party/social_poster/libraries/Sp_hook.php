@@ -1,7 +1,9 @@
 <?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
 
 class Sp_hook {
- 		
+ 	
+    var $action_name = 'default action';
+     	
 	public function __construct($params = array())
 	{
 		$this->EE =& get_instance();        
@@ -47,7 +49,7 @@ class Sp_hook {
     }
     
     
-    public function get_keys()
+    public function get_keys($hook)
 	{
 
         $keys_arr = array();
@@ -58,55 +60,62 @@ class Sp_hook {
         
         //then, permissions
         
-        $this->EE->db->select('social_login_keys, social_poster_permissions')
+        $this->EE->db->select('social_login_keys, social_poster_permissions, social_poster_permissions_detailed')
             ->from('members')
             ->where('member_id', $this->EE->session->userdata('member_id'));
         $q = $this->EE->db->get();
         if ($q->row('social_login_keys')=='') return false;
-        if ($q->row('social_login_keys')!='')
+
+        $user_keys = unserialize($q->row('social_login_keys'));
+        $user_permissions = unserialize($q->row('social_poster_permissions'));
+        $user_permissions_detailed = unserialize($q->row('social_poster_permissions_detailed'));
+        
+        if (empty($user_keys)) return false;
+        foreach ($user_keys as $provider => $keys)
         {
-            $user_keys = unserialize($q->row('social_login_keys'));
-            $user_permissions = unserialize($q->row('social_poster_permissions'));
-            
-            if (empty($user_keys)) return false;
-            foreach ($user_keys as $provider => $keys)
+            if (isset($user_permissions_detailed[$site_id][$provider][$hook]))
             {
-                if (isset($user_permissions[$site_id][$provider]))
+                if ($user_permissions_detailed[$site_id][$provider][$hook]=='y')
                 {
-                    if ($user_permissions[$site_id][$provider]=='y')
-                    {
-                        $keys_arr[$provider] = $keys;
-                    }
-                }
-                else
-                {
-                    if (!isset($settings))
-                    {
-                        $settings_query = $this->EE->db->select("settings")
-                                            ->from('extensions')
-                                            ->where('class', 'Social_poster_ext')
-                                            ->where('settings != ', '')
-                                            ->limit('1')
-                                            ->get();
-                        $settings = unserialize($settings_query->row('settings')); 
-                    }
-                    if ($settings[$site_id]['post_by_default'][$provider]=='y')
-                    {
-                        $keys_arr[$provider] = $keys;
-                    }
+                    $keys_arr[$provider] = $keys;
                 }
             }
-
+            else if (isset($user_permissions[$site_id][$provider]))
+            {
+                if ($user_permissions[$site_id][$provider]=='y')
+                {
+                    $keys_arr[$provider] = $keys;
+                }
+            }
+            else
+            {
+                if (!isset($settings))
+                {
+                    $settings_query = $this->EE->db->select("settings")
+                                        ->from('extensions')
+                                        ->where('class', 'Social_poster_ext')
+                                        ->where('settings != ', '')
+                                        ->limit('1')
+                                        ->get();
+                    $settings = unserialize($settings_query->row('settings')); 
+                }
+                if ($settings[$site_id]['post_by_default'][$provider]=='y')
+                {
+                    $keys_arr[$provider] = $keys;
+                }
+            }
         }
+
 
         return $keys_arr;
     }
     
     
-	public function post($message, $link = '')
+	public function post($hook, $message, $link = '')
 	{
+        if ($message=='') return false;        
         
-        $keys_arr = $this->get_keys();
+        $keys_arr = $this->get_keys($hook);
         
         if ($keys_arr==false || empty($keys_arr)) return false;
         
