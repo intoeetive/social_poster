@@ -81,7 +81,7 @@ class Social_poster {
                 {
                     $enabled = $enabled_by_default[$provider_name];
                 }
-                $permissions[$provider] = $enabled;
+                $permissions[$provider_name] = $enabled;
             }
         }
         
@@ -97,14 +97,14 @@ class Social_poster {
                 $row = $this->EE->TMPL->swap_var_single('field_label', lang($key), $row);
                 if ($val=='y')
                 {
-                    $row = $this->EE->TMPL->swap_var_single('selected_yes', ' selected="selected"', $row);
+                    $row = $this->EE->TMPL->swap_var_single('selected_yes', ' selected="selected" checked="checked"', $row);
                     $row = $this->EE->TMPL->swap_var_single('checked_yes', ' checked="checked"', $row);
                     $row = $this->EE->TMPL->swap_var_single('selected_no', '', $row);
                     $row = $this->EE->TMPL->swap_var_single('checked_no', '', $row);
                 }
                 else
                 {
-                    $row = $this->EE->TMPL->swap_var_single('selected_no', ' selected="selected"', $row);
+                    $row = $this->EE->TMPL->swap_var_single('selected_no', ' selected="selected" checked="checked"', $row);
                     $row = $this->EE->TMPL->swap_var_single('checked_no', ' checked="checked"', $row);
                     $row = $this->EE->TMPL->swap_var_single('selected_yes', '', $row);
                     $row = $this->EE->TMPL->swap_var_single('checked_yes', '', $row);
@@ -117,7 +117,7 @@ class Social_poster {
               
         $data['action'] = $this->EE->functions->fetch_site_index();
 
-        $data['hidden_fields']['ACT'] = $this->EE->functions->fetch_action_id('Social_poster', 'save_permissions');   
+        $data['hidden_fields']['ACT'] = $this->EE->functions->fetch_action_id('Social_poster', 'save_default_permissions');   
         if ($this->EE->TMPL->fetch_param('return')=='')
         {
             $return = '/'.ltrim(str_replace($this->EE->config->item('site_url'), '', $this->EE->functions->fetch_site_index()),'/');
@@ -177,7 +177,7 @@ class Social_poster {
             $permissions[$site_id][$key] = $val;
         }        
         
-        $upd_data = array('social_login_permissions' => serialize($permissions));
+        $upd_data = array('social_poster_permissions' => serialize($permissions));
         
         $this->EE->db->where('member_id', $this->EE->session->userdata('member_id'));
         $this->EE->db->update('members', $upd_data);
@@ -227,6 +227,7 @@ class Social_poster {
         if ($q->row('social_poster_permissions')!='')
         {
             $global_permissions = unserialize($q->row('social_poster_permissions'));
+            $global_permissions = $global_permissions[$site_id];
         }
         else
         {
@@ -234,10 +235,11 @@ class Social_poster {
             $settings = unserialize($settings_query->row('settings')); 
             $global_permissions = $settings[$site_id]['post_by_default'];
         }
+        $existing_permissions = ($q->row('social_poster_permissions_detailed')!='')?unserialize($q->row('social_poster_permissions_detailed')):array();
         
         $hooks_q = $this->EE->db->select('hook')
                         ->from('extensions')
-                        ->where('class', __CLASS__)
+                        ->where('class', __CLASS__.'_ext')
                         ->where('extensions.hook != ', 'dummy')
                         ->where('enabled', 'y')
                         ->get();
@@ -252,35 +254,43 @@ class Social_poster {
 			$tmpl = $match['1'];
             $rows = '';
             
-            foreach ($provider as $provider=>$enabled)
+            $this->EE->load->library('sp_hook');
+            
+            foreach ($global_permissions as $provider=>$enabled)
             {
-                if ($enabled=='y')
+                foreach ($hooks_q->result_array() as $hook_row)
                 {
-                    foreach ($hooks_q->result_array() as $hook_row)
+                    require_once PATH_THIRD.'social_poster/hooks/'.$hook_row['hook'].'.php';
+                    $class_name = ucfirst($hook_row['hook']).'_sp_hook';
+                    $SL_HOOK = new $class_name();
+    
+                    $row = $tmpl;
+                    $row = $this->EE->TMPL->swap_var_single('field_name', "permissions[$provider][{$hook_row['hook']}]", $row);
+                    $row = $this->EE->TMPL->swap_var_single('field_label', lang('post_to').' '.lang($provider).' '.lang('when').' '.$SL_HOOK->action_name, $row);
+                    
+                    if (isset($existing_permissions[$site_id][$provider][$hook_row['hook']])) 
                     {
-                        require_once PATH_THIRD.'social_poster/hooks/'.$hook_row['hook'].'.php';
-                        $class_name = ucfirst($name).'_sp_hook';
-                        $SL_HOOK = new $class_name();
-        
-                        $row = $tmpl;
-                        $row = $this->EE->TMPL->swap_var_single('field_name', "permissions[$provider][{$hook_row['hook']}]", $row);
-                        $row = $this->EE->TMPL->swap_var_single('field_label', lang('post_to').' '.lang($provider).' '.lang('when').' '.$SL_HOOK->action_name, $row);
-                        if ($val=='y')
-                        {
-                            $row = $this->EE->TMPL->swap_var_single('selected_yes', ' selected="selected"', $row);
-                            $row = $this->EE->TMPL->swap_var_single('checked_yes', ' checked="checked"', $row);
-                            $row = $this->EE->TMPL->swap_var_single('selected_no', '', $row);
-                            $row = $this->EE->TMPL->swap_var_single('checked_no', '', $row);
-                        }
-                        else
-                        {
-                            $row = $this->EE->TMPL->swap_var_single('selected_no', ' selected="selected"', $row);
-                            $row = $this->EE->TMPL->swap_var_single('checked_no', ' checked="checked"', $row);
-                            $row = $this->EE->TMPL->swap_var_single('selected_yes', '', $row);
-                            $row = $this->EE->TMPL->swap_var_single('checked_yes', '', $row);
-                        }
-                        $rows .= $row;
+                        $currently_enabled = $existing_permissions[$site_id][$provider][$hook_row['hook']];
                     }
+                    else
+                    {
+                        $currently_enabled = $enabled;
+                    }
+                    if ($currently_enabled=='y')
+                    {
+                        $row = $this->EE->TMPL->swap_var_single('selected_yes', ' selected="selected" checked="checked"', $row);
+                        $row = $this->EE->TMPL->swap_var_single('checked_yes', ' checked="checked"', $row);
+                        $row = $this->EE->TMPL->swap_var_single('selected_no', '', $row);
+                        $row = $this->EE->TMPL->swap_var_single('checked_no', '', $row);
+                    }
+                    else
+                    {
+                        $row = $this->EE->TMPL->swap_var_single('selected_no', ' selected="selected" checked="checked"', $row);
+                        $row = $this->EE->TMPL->swap_var_single('checked_no', ' checked="checked"', $row);
+                        $row = $this->EE->TMPL->swap_var_single('selected_yes', '', $row);
+                        $row = $this->EE->TMPL->swap_var_single('checked_yes', '', $row);
+                    }
+                    $rows .= $row;
                 }
             }
             
@@ -335,20 +345,24 @@ class Social_poster {
         
         $site_id = $this->EE->config->item('site_id');
         
-        $this->EE->db->select('social_poster_permissions')
+        $this->EE->db->select('social_poster_permissions_detailed')
             ->from('members')
             ->where('member_id', $this->EE->session->userdata('member_id'));
         $q = $this->EE->db->get();
-        if ($q->row('social_poster_permissions')!='')
+        if ($q->row('social_poster_permissions_detailed')!='')
         {
-            $permissions = unserialize($q->row('social_poster_permissions'));
+            $permissions = unserialize($q->row('social_poster_permissions_detailed'));
         }
 
-        foreach ($_POST['permissions'] as $key=>$val)
+        foreach ($_POST['permissions'] as $provider=>$arr)
         {
-            $permissions[$site_id][$key] = $val;
+            foreach ($arr as $hook=>$val)
+            {
+                $permissions[$site_id][$provider][$hook] = $val;
+            }
         }        
         
+        /*
         if ( ! class_exists('Social_login_pro_ext'))
     	{
     		require_once PATH_THIRD.'social_login_pro/ext.social_login_pro.php';
@@ -364,8 +378,9 @@ class Social_poster {
                 $permissions[$site_id][$provider] = (isset($settings[$site_id]['post_by_default'][$provider]))?$settings[$site_id]['post_by_default'][$provider]:'n';
             }
         }
-        
-        $upd_data = array('social_login_permissions' => serialize($permissions));
+        */
+
+        $upd_data = array('social_poster_permissions_detailed' => serialize($permissions));
         
         $this->EE->db->where('member_id', $this->EE->session->userdata('member_id'));
         $this->EE->db->update('members', $upd_data);

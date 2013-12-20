@@ -27,6 +27,12 @@ $lang = array(
 "enabled" =>
 "Enabled",
 
+'post_to' =>
+'Post to ',
+
+'preferences_updated' =>
+"Preferences updated",
+
 /* END */
 ''=>''
 );

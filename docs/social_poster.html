@@ -71,11 +71,12 @@
 {exp:social_poster:default_permissions return="SAME_PAGE"}<br />
 {permissions}<br />
 &lt;p&gt;<br />
-{field_label}<br />
+Allow posting to {field_label}?<br />
 &lt;input type="radio" value="y" name="{field_name}" {selected_yes} /&gt; Yes<br />
 &lt;input type="radio" value="n" name="{field_name}" {selected_no} /&gt; No<br />
 &lt;/p&gt;<br />
 {/permissions}<br />
+&lt;input type="submit" value="Save" /&gt;<br />
 {/exp:social_poster:default_permissions}
 </code>
 
@@ -118,6 +119,7 @@
 &lt;input type="radio" value="n" name="{field_name}" {selected_no} /&gt; No<br />
 &lt;/p&gt;<br />
 {/permissions}<br />
+&lt;input type="submit" value="Save" /&gt;<br />
 {/exp:social_poster:permissions}
 </code>
 
