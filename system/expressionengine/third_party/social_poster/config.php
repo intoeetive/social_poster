@@ -10,4 +10,4 @@ if ( ! defined('SOCIAL_POSTER_ADDON_NAME'))
 $config['name'] = SOCIAL_POSTER_ADDON_NAME;
 $config['version'] = SOCIAL_POSTER_ADDON_VERSION;
 
-$config['nsm_addon_updater']['versions_xml'] = 'http://www.intoeetive.com/index.php/update.rss/150';
+$config['nsm_addon_updater']['versions_xml'] = 'http://www.intoeetive.com/index.php/update.rss/305';
