@@ -33,6 +33,9 @@ $lang = array(
 'preferences_updated' =>
 "Preferences updated",
 
+"setup_slp" =>
+"Social Login Pro need to be installed and completely set up before using Social Poster",
+
 /* END */
 ''=>''
 );

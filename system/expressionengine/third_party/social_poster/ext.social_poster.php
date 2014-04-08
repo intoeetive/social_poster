@@ -218,6 +218,8 @@ class Social_poster_ext {
         $slp_settings = unserialize($slp_settings_q->row('settings'));
         
         $this->EE->load->library('sp_hook');
+        
+        $slp_set = false;
 
         $vars = array();
         foreach ($SLP->providers as $provider)
@@ -228,7 +230,13 @@ class Social_poster_ext {
                 $vars['settings'][$provider] = form_radio("permissions[$provider]", 'y', ($enabled_by_default=='y')?true:false, 'id="'.$provider.'_y"').form_label(lang('yes'), $provider.'_y').
                     NBS.
                     form_radio("permissions[$provider]", 'n', ($enabled_by_default=='n')?true:false, 'id="'.$provider.'_n"').form_label(lang('no'), $provider.'_n');
+                $slp_set = true;
             }
+        }
+        
+        if ($slp_set==false)
+        {
+            show_error(lang('setup_slp'));
         }
         
         //list all hooks
@@ -245,10 +253,10 @@ class Social_poster_ext {
             $class_name = ucfirst($row['hook']).'_sp_hook';
             $SL_HOOK = new $class_name();
             
-            $vars['hooks'][$SL_HOOK->action_name] = form_radio("hooks[{$row['hook']}]", 'y', ($row['enabled']=='y')?true:false, 'id="'.$row['hook'].'_y"').form_label(lang('yes'), $row['hook'].'_y').
+            $vars['hooks']["$SL_HOOK->action_name"] = form_radio("hooks[{$row['hook']}]", 'y', ($row['enabled']=='y')?true:false, 'id="'.$row['hook'].'_y"').form_label(lang('yes'), $row['hook'].'_y').
                 NBS.
                 form_radio("hooks[{$row['hook']}]", 'n', ($row['enabled']=='n')?true:false, 'id="'.$row['hook'].'_n"').form_label(lang('no'), $row['hook'].'_n');
-            $vars['templates'][$row['hook']] = array(
+            $vars['templates']["$SL_HOOK->action_name"] = array(
                 'vars'      => '',
                 'template'  => form_textarea("templates[{$row['hook']}]", (isset($row['tmpl_body']) && $row['tmpl_body']!='')?$row['tmpl_body']:$SL_HOOK->template()).
                                 BR.
@@ -259,7 +267,7 @@ class Social_poster_ext {
             $tmpl_vars = unserialize($SL_HOOK->vars());
             foreach ($tmpl_vars as $key=>$val)
             {
-                $vars['templates'][$row['hook']]['vars'] .= $key.' &mdash; '.$val.BR;
+                $vars['templates']["$SL_HOOK->action_name"]['vars'] .= $key.' &mdash; '.$val.BR;
             }
         }
 
