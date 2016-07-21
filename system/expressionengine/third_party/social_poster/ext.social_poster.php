@@ -136,7 +136,7 @@ class Social_poster_ext {
                 {
                     $data = array(
                 		'class'		=> __CLASS__,
-                		'method'	=> 'do_something',
+                		'method'	=> $hook,
                 		'hook'		=> $hook,
                 		'settings'	=> '',
                 		'priority'	=> 10,
